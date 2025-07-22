@@ -26,5 +26,6 @@ func main() {
 	err := app.RunContext(ctx, os.Args)
 	if err != nil {
 		log.Error().Err(err).Msg("yaml tpl linting failed")
+		os.Exit(1)
 	}
 }
