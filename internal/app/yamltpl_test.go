@@ -80,6 +80,24 @@ func TestIsNonControlStructure(t *testing.T) {
 	}
 }
 
+func TestIsTemplateComment(t *testing.T) {
+	tests := []struct {
+		line string
+		want bool
+	}{
+		{"{{/* this is a comment */}}", true},
+		{"{{-/* comment */-}}", true},
+		{"Not a comment", false},
+	}
+
+	for _, tt := range tests {
+		got := isTemplateComment(tt.line)
+		if got != tt.want {
+			t.Errorf("isTemplateComment(%q) = %t, want %t", tt.line, got, tt.want)
+		}
+	}
+}
+
 func TestFormatYamlTpl(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -96,6 +114,28 @@ kind: Pod
 {{ if .Condition }}
 kind: Pod
 {{ end }}`,
+		},
+		{
+			name: "Variable assignment indented",
+			yamlTpl: `apiVersion: v1
+{{- if .Condition }}
+{{ $commonFilePath := printf "files/all/*" -}}
+kind: Pod
+{{- end }}`,
+			want: `apiVersion: v1
+{{- if .Condition }}
+  {{ $commonFilePath := printf "files/all/*" -}}
+kind: Pod
+{{- end }}`,
+		},
+		{
+			name: "Inline control structure on single line",
+			yamlTpl: `apiVersion: v1
+{{- if .Values.deploymentId -}}-{{- .Values.deploymentId | toString | replace "." "-" -}}{{- end -}}
+kind: Pod`,
+			want: `apiVersion: v1
+{{- if .Values.deploymentId -}}-{{- .Values.deploymentId | toString | replace "." "-" -}}{{- end -}}
+kind: Pod`,
 		},
 		{
 			name: "Nested structures",
@@ -142,6 +182,19 @@ kind: Pod
 {{- if or (eq .Values.controller.kind "Deployment") (eq .Values.controller.kind "Both") -}}
   {{- include  "isControllerTagValid" . -}}
   {{- include "ingress-nginx.labels" . | nindent 4 }}
+{{- end }}`,
+		},
+		{
+			name: "Template comments ignored",
+			yamlTpl: `apiVersion: v1
+{{- if .Condition }}
+{{/* helm comment */}}
+kind: Pod
+{{- end }}`,
+			want: `apiVersion: v1
+{{- if .Condition }}
+  {{/* helm comment */}}
+kind: Pod
 {{- end }}`,
 		},
 		{

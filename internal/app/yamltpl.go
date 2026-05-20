@@ -2,16 +2,44 @@ package app
 
 import (
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
-var controlStructureStart = regexp.MustCompile(`^{{-?\s*(if|range|with|define)\s`)
-var controlStructureContinue = regexp.MustCompile(`^{{-?\s*(else)\s`)
-var controlStructureEnd = regexp.MustCompile(`^{{-?\s*end\s*-?}}`)
-var nonControlStructure = regexp.MustCompile(`^{{-?\s*(include|toYaml|nindent|print)\s`)
+const (
+	controlStartPattern    = `{{-?\s*(if|range|with|define)\s`
+	controlContinuePattern = `{{-?\s*(else)\s`
+	controlEndPattern      = `{{-?\s*end\s*-?}}`
+	nonControlPattern      = `{{-?\s*(include|toYaml|nindent|print)\s`
+	templateCommentPattern = `{{-?\s*/\*`
+	// variableAssignmentPattern matches go-template variable declarations like
+	// {{ $var := ... }} or {{- $var := ... -}} and should be treated as a
+	// non-structural line (indented to the current block level).
+	variableAssignmentPattern = `{{-?\s*\$[A-Za-z0-9_.-]+\s*:=`
+)
+
+var (
+	// Anchored variants: must start at beginning of the trimmed line
+	controlStructureStart    = regexp.MustCompile(`^` + controlStartPattern)
+	controlStructureContinue = regexp.MustCompile(`^` + controlContinuePattern)
+	controlStructureEnd      = regexp.MustCompile(`^` + controlEndPattern)
+	nonControlStructure      = regexp.MustCompile(`^` + nonControlPattern)
+
+	// Unanchored variants: match tokens anywhere in the line. Used to detect
+	// inline templates that both open and close on the same line.
+	containsControlStructureStart = regexp.MustCompile(controlStartPattern)
+	containsControlStructureEnd   = regexp.MustCompile(controlEndPattern)
+
+	// templateComment matches helm/go-template comments that start with {{/* or {{- /*
+	// Example: {{/* some comment */}} or {{-/* comment */ -}}
+	templateComment = regexp.MustCompile(`^` + templateCommentPattern)
+	variableAssignment = regexp.MustCompile(`^` + variableAssignmentPattern)
+)
+
+
 
 // FormatYamlTpl formats a yaml template string
 func FormatYamlTpl(yamlTpl string) (string, error) {
@@ -21,11 +49,26 @@ func FormatYamlTpl(yamlTpl string) (string, error) {
 	var formattedLines []string
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(strings.Replace(line, "\t", "\n", -1))
+		// If a line contains both a start and an end control structure (inline template),
+		// treat it as a single-line template and do not modify indentLevel.
+		if containsControlStructureStart.MatchString(trimmed) && containsControlStructureEnd.MatchString(trimmed) {
+			formattedLines = append(formattedLines, formatLine(line, indentLevel))
+			continue
+		}
+
 		if isStartControlStructure(trimmed) {
 			formattedLines = append(formattedLines, formatLine(line, indentLevel))
 			indentLevel++
 		} else if isContinueControlStructure(trimmed) {
 			formattedLines = append(formattedLines, formatLine(line, indentLevel-1))
+		} else if isTemplateComment(trimmed) {
+			// Template comments should be ignored for control-structure processing
+			// and indented according to the current block level.
+			formattedLines = append(formattedLines, formatLine(line, indentLevel))
+		} else if isVariableAssignment(trimmed) {
+			// Variable assignment lines ({{ $x := ... }}) are not control structures
+			// but should be indented to the current block level.
+			formattedLines = append(formattedLines, formatLine(line, indentLevel))
 		} else if isNonControlStructure(trimmed) {
 			// Non-control structures and empty lines are indented according to their current block level
 			formattedLines = append(formattedLines, formatLine(line, indentLevel))
@@ -112,3 +155,14 @@ func isNonControlStructure(line string) bool {
 	lineWithoutLeadingSpaces := strings.TrimSpace(line)
 	return nonControlStructure.MatchString(lineWithoutLeadingSpaces)
 }
+
+func isTemplateComment(line string) bool {
+	lineWithoutLeadingSpaces := strings.TrimSpace(line)
+	return templateComment.MatchString(lineWithoutLeadingSpaces)
+}
+
+func isVariableAssignment(line string) bool {
+	lineWithoutLeadingSpaces := strings.TrimSpace(line)
+	return variableAssignment.MatchString(lineWithoutLeadingSpaces)
+}
+
