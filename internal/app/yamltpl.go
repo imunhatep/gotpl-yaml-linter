@@ -18,7 +18,7 @@ const (
 	// variableAssignmentPattern matches go-template variable declarations like
 	// {{ $var := ... }} or {{- $var := ... -}} and should be treated as a
 	// non-structural line (indented to the current block level).
-	variableAssignmentPattern = `{{-?\s*\$[A-Za-z0-9_.-]+\s*:=`
+	variableAssignmentPattern = `{{-?\s*\$[A-Za-z0-9_.-]+\s*\:?=`
 )
 
 var (
@@ -35,11 +35,9 @@ var (
 
 	// templateComment matches helm/go-template comments that start with {{/* or {{- /*
 	// Example: {{/* some comment */}} or {{-/* comment */ -}}
-	templateComment = regexp.MustCompile(`^` + templateCommentPattern)
+	templateComment    = regexp.MustCompile(`^` + templateCommentPattern)
 	variableAssignment = regexp.MustCompile(`^` + variableAssignmentPattern)
 )
-
-
 
 // FormatYamlTpl formats a yaml template string
 func FormatYamlTpl(yamlTpl string) (string, error) {
@@ -165,4 +163,3 @@ func isVariableAssignment(line string) bool {
 	lineWithoutLeadingSpaces := strings.TrimSpace(line)
 	return variableAssignment.MatchString(lineWithoutLeadingSpaces)
 }
-
