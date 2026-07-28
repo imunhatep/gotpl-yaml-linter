@@ -14,8 +14,8 @@ type FormatCommand struct{}
 func (c FormatCommand) Command() *cli.Command {
 	return &cli.Command{
 		Name:      "fmt",
-		Usage:     "yaml tpl format ",
-		UsageText: "Example: gotpl_linter -v 10 fmt --path ./templates --filter *.yaml",
+		Usage:     "format yaml tpl files in place",
+		UsageText: "Example: gotpl-linter --vv 10 fmt --path ./templates --filter '*.yaml'",
 		Flags: []cli.Flag{
 			&cli.PathFlag{
 				Name:        "path",
@@ -38,6 +38,13 @@ func (c FormatCommand) Command() *cli.Command {
 				Required: false,
 				Value:    false,
 			},
+			&cli.BoolFlag{
+				Name:     "trim",
+				Aliases:  []string{"t"},
+				Usage:    "rewrite non-{{- template openings to {{- so they can be re-indented (may change rendered output)",
+				Required: false,
+				Value:    false,
+			},
 		},
 		Action: c.fmtAction,
 	}
@@ -47,11 +54,12 @@ func (c FormatCommand) fmtAction(ctx *cli.Context) error {
 	path := ctx.Path("path")
 	filter := ctx.String("filter")
 	output := ctx.Bool("show")
+	forceTrim := ctx.Bool("trim")
 
-	return yamlTplLinting(path, filter, true, output)
+	return yamlTplLinting(path, filter, true, output, forceTrim)
 }
 
-func yamlTplLinting(path, filter string, format, output bool) error {
+func yamlTplLinting(path, filter string, format, output, forceTrim bool) error {
 	fileList, err := app.ListFilesInDir(path, filter)
 	if err != nil {
 		return err
@@ -62,7 +70,7 @@ func yamlTplLinting(path, filter string, format, output bool) error {
 	// Print matched files
 	allTrue := true
 	for _, match := range fileList {
-		valid, err := app.FormatYamlTplFile(match, format, output)
+		valid, err := app.FormatYamlTplFile(match, format, output, forceTrim)
 		if err != nil {
 			log.Error().Err(err).Str("file", match).Msg("failed formatting")
 		}

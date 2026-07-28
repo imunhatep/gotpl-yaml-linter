@@ -13,9 +13,11 @@ func NewApp(version string) *cli.App {
 	cmd.EnableBashCompletion = true
 	cmd.Version = version
 	cmd.Name = "gotpl-linter"
-	cmd.Usage = "GoLang template for yaml formatting and linting tool"
-	cmd.UsageText = "gotpl-linter [command] [subcommand] [command options]"
-	cmd.Description = "https://github.com/imunhatep/gotpl-yaml-linter/README.md"
+	cmd.Usage = "Go template YAML (Helm) formatting and linting tool"
+	cmd.UsageText = "gotpl-linter [global options] command [command options]"
+	cmd.Description = "Lints and formats Go template YAML files (e.g. Helm charts), " +
+		"indenting template blocks by go-template control-structure depth.\n" +
+		"   Docs: https://github.com/imunhatep/gotpl-yaml-linter/blob/main/README.md"
 	cmd.Before = func(ctx *cli.Context) error {
 		verbose := ctx.Int("verbose")
 		setLogLevel(verbose)

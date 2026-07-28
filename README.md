@@ -1,39 +1,38 @@
-# GoTemplate linting for yaml (Helm) files
-This tool will list files based on the provided criteria and format them if specified with options.
+# gotpl-linter — Go template YAML (Helm) linting & formatting
 
-## How to install
-Use go install command, i.e.:
+A small CLI that lints and formats Go-template YAML files, primarily Helm chart
+templates. It re-indents template blocks based on **go-template control-structure
+depth** (`if` / `range` / `with` / `define` … `end`) rather than YAML nesting, so
+nested `{{- if }}` / `{{- end }}` blocks line up consistently at two spaces per level.
+
+Built with Go 1.22.
+
+## Install
+
 ```bash
 go install github.com/imunhatep/gotpl-yaml-linter/cmd/gotpl-linter@latest
 
 gotpl-linter --help
 ```
 
-Project built using go1.22
+## Usage
 
-## How to Run
-Linter tool supports to commands: 
- - lint
- - format
+The tool has two commands:
 
-```bash
-gotpl-yaml-linter help
+- **`lint`** — validate formatting; **writes nothing**. Exits non-zero if any file
+  is not correctly formatted. Use this in CI.
+- **`fmt`** — format files **in place**, rewriting any file that differs.
 
+```
 NAME:
-   gotpl-linter - GoLang template for yaml formatting and linting tool
+   gotpl-linter - Go template YAML (Helm) formatting and linting tool
 
 USAGE:
-   gotpl-linter [command] [subcommand] [command options]
-
-VERSION:
-   v1.2.0
-
-DESCRIPTION:
-   https://github.com/imunhatep/gotpl-yaml-linter/README.md
+   gotpl-linter [global options] command [command options]
 
 COMMANDS:
-   fmt      yaml tpl format
-   lint     yaml gotpl linting
+   fmt      format yaml tpl files in place
+   lint     validate yaml gotpl formatting (no changes written)
    help, h  Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -42,59 +41,78 @@ GLOBAL OPTIONS:
    --version, -v                print the version
 ```
 
+`--vv` sets log verbosity: `0` fatal, `1` error, `2` warn, `3` info (default),
+`4` debug, `5`+ trace. It can also be set via the `APP_DEBUG` environment variable.
+
+### Command options
+
+Both `lint` and `fmt` take the same flags:
+
+| Flag | Alias | Default | Description |
+|------|-------|---------|-------------|
+| `--path`   | `-p` | `./` | Directory to scan for template files |
+| `--filter` | `-f` | `*`  | Glob pattern to match files (single directory level, non-recursive) |
+| `--show`   | `-s` | `false` | Print the expected formatting to stdout |
+| `--trim`   | `-t` | `false` | Rewrite non-`{{-` template openings to `{{-` so they can be re-indented |
+
+> Note: `--filter` is a single-level glob matched against `<path>/<filter>`; it does
+> not recurse into subdirectories.
+
+### Re-indentation and rendered output
+
+Re-indentation only changes the **leading whitespace** of template lines. That
+whitespace is stripped at render time *only* when the line's opening action
+left-trims (`{{-`). A line that opens with a plain `{{` has its leading whitespace
+rendered literally into the output, so re-indenting it would shift the emitted YAML.
+
+- **By default** the tool is output-safe: lines that do **not** left-trim are left
+  exactly as they are (their block depth is still tracked, so surrounding `{{-` lines
+  indent correctly). Lines that already use `{{-` are re-indented.
+- **With `--trim` (`-t`)** the tool rewrites each non-`{{-` opening to `{{-` and then
+  re-indents it. This normalises indentation everywhere but **can change the rendered
+  output**, so review the diff before committing.
 
 ### Lint
-Running lint command will test files on proper linting.
+
+Validate that files are correctly formatted. Nothing is written; a non-zero exit
+code indicates at least one file is not formatted as expected.
 
 ```bash
-gotpl-yaml-linter lint help
-
-NAME:
-   yamltpl_linter lint - yaml tpl linting
-
-USAGE:
-   Example: bin/yamltpl_{os}-{arch} -vv 10 lint -p ./templates/ -f *.yaml
-
-OPTIONS:
-   --path value, -p value    path to go tpl files (default: ./)
-   --filter value, -f value  filter files by pattern (default: "*")
-   --show, -s                output expected formatting (default: false)
-   --help, -h                show help
+gotpl-linter --vv 10 lint --path ./templates --filter '*.yaml'
 ```
-
 
 ### Format
-Executing format command will update file contents in place.
+
+Rewrite files in place to the expected formatting.
 
 ```bash
-gotpl-linter fmt help
-
-NAME:
-   gotpl-linter fmt - yaml tpl format
-
-USAGE:
-   Example: gotpl-linter -vv 10 fmt -p ./templates/ -f *.yaml
-
-OPTIONS:
-   --path value, -p value    path to go tpl files (default: ./)
-   --filter value, -f value  filter files by pattern (default: "*")
-   --show, -s                output expected formatting (default: false)
-   --help, -h                show help
+gotpl-linter --vv 10 fmt --path ./templates --filter '*.yaml'
 ```
 
+Add `--show` to either command to print the expected output:
+
+```bash
+gotpl-linter lint -p ./templates -f '*.yaml' --show
+```
 
 ## Examples
-Examples of formatting yaml tpl files
+
+Formatting reindents template control lines to two spaces per block level. Plain
+YAML lines are left untouched — only go-template lines are re-indented.
 
 ### Example 1
-#### Input
+
+Input:
+
 ```gotemplate
 {{- if or (eq .Values.controller.kind "Deployment") (eq .Values.controller.kind "Both") -}}
 {{- include  "isControllerTagValid" . -}}
     {{- include "ingress-nginx.labels" . | nindent 4 }}
 {{- end }}
 ```
-#### Output
+
+Output:
+
 ```gotemplate
 {{- if or (eq .Values.controller.kind "Deployment") (eq .Values.controller.kind "Both") -}}
   {{- include  "isControllerTagValid" . -}}
@@ -103,7 +121,9 @@ Examples of formatting yaml tpl files
 ```
 
 ### Example 2
-#### Input
+
+Input:
+
 ```gotemplate
 {{- if or (eq .Values.controller.kind "Deployment") (eq .Values.controller.kind "Both") -}}
 {{- include  "isControllerTagValid" . -}}
@@ -124,7 +144,8 @@ metadata:
 {{- end }}
 ```
 
-#### Output
+Output:
+
 ```gotemplate
 {{- if or (eq .Values.controller.kind "Deployment") (eq .Values.controller.kind "Both") -}}
   {{- include  "isControllerTagValid" . -}}
@@ -146,7 +167,9 @@ metadata:
 ```
 
 ### Example 3
-#### Input
+
+Input:
+
 ```gotemplate
 {{- if or (eq .Values.controller.kind "Deployment") (eq .Values.controller.kind "Both") -}}
 {{- include  "isControllerTagValid" . -}}
@@ -165,7 +188,8 @@ metadata:
 {{- end }}
 ```
 
-#### Output
+Output:
+
 ```gotemplate
 {{- if or (eq .Values.controller.kind "Deployment") (eq .Values.controller.kind "Both") -}}
   {{- include  "isControllerTagValid" . -}}
@@ -182,4 +206,12 @@ metadata:
   {{- if not .Values.controller.autoscaling.enabled }}
   {{- end }}
 {{- end }}
+```
+
+## Build from source
+
+```bash
+make          # build binary into dist/
+make test     # gofmt check + go vet + golint + go test
+make xb       # cross-build for linux/darwin/windows
 ```

@@ -100,9 +100,10 @@ func TestIsTemplateComment(t *testing.T) {
 
 func TestFormatYamlTpl(t *testing.T) {
 	tests := []struct {
-		name    string
-		yamlTpl string
-		want    string
+		name      string
+		yamlTpl   string
+		forceTrim bool
+		want      string
 	}{
 		{
 			name: "No indentation needed",
@@ -116,15 +117,29 @@ kind: Pod
 {{ end }}`,
 		},
 		{
-			name: "Variable assignment indented",
+			name: "Variable assignment without left-trim is preserved",
 			yamlTpl: `apiVersion: v1
 {{- if .Condition }}
 {{ $commonFilePath := printf "files/all/*" -}}
 kind: Pod
 {{- end }}`,
+			// {{ $... has no left-trim marker, so its indentation is left untouched.
 			want: `apiVersion: v1
 {{- if .Condition }}
-  {{ $commonFilePath := printf "files/all/*" -}}
+{{ $commonFilePath := printf "files/all/*" -}}
+kind: Pod
+{{- end }}`,
+		},
+		{
+			name: "Variable assignment with left-trim is indented",
+			yamlTpl: `apiVersion: v1
+{{- if .Condition }}
+{{- $commonFilePath := printf "files/all/*" -}}
+kind: Pod
+{{- end }}`,
+			want: `apiVersion: v1
+{{- if .Condition }}
+  {{- $commonFilePath := printf "files/all/*" -}}
 kind: Pod
 {{- end }}`,
 		},
@@ -138,7 +153,7 @@ kind: Pod`,
 kind: Pod`,
 		},
 		{
-			name: "Nested structures",
+			name: "Nested structures without left-trim are preserved",
 			yamlTpl: `apiVersion: v1
 {{ if .Condition }}
 kind: Pod
@@ -148,15 +163,35 @@ spec:
   - name: my-container
 {{ end }}
 {{ end }}`,
+			// None of the control lines left-trim, so re-indenting them would shift
+			// the rendered output; they are left as-is.
 			want: `apiVersion: v1
 {{ if .Condition }}
 kind: Pod
-  {{ with .Spec }}
+{{ with .Spec }}
 spec:
   containers:
   - name: my-container
-  {{ end }}
+{{ end }}
 {{ end }}`,
+		},
+		{
+			name:      "Nested structures without left-trim are rewritten with --trim",
+			forceTrim: true,
+			yamlTpl: `apiVersion: v1
+{{ if .Condition }}
+kind: Pod
+{{ with .Spec }}
+{{ toYaml .Spec }}
+{{ end }}
+{{ end }}`,
+			want: `apiVersion: v1
+{{- if .Condition }}
+kind: Pod
+  {{- with .Spec }}
+    {{- toYaml .Spec }}
+  {{- end }}
+{{- end }}`,
 		},
 		{
 			name: "Mixed control and non-control structures",
@@ -185,7 +220,20 @@ kind: Pod
 {{- end }}`,
 		},
 		{
-			name: "Template comments ignored",
+			name: "Template comment with left-trim is indented",
+			yamlTpl: `apiVersion: v1
+{{- if .Condition }}
+{{- /* helm comment */}}
+kind: Pod
+{{- end }}`,
+			want: `apiVersion: v1
+{{- if .Condition }}
+  {{- /* helm comment */}}
+kind: Pod
+{{- end }}`,
+		},
+		{
+			name: "Template comment without left-trim is preserved",
 			yamlTpl: `apiVersion: v1
 {{- if .Condition }}
 {{/* helm comment */}}
@@ -193,7 +241,7 @@ kind: Pod
 {{- end }}`,
 			want: `apiVersion: v1
 {{- if .Condition }}
-  {{/* helm comment */}}
+{{/* helm comment */}}
 kind: Pod
 {{- end }}`,
 		},
@@ -232,10 +280,78 @@ kind: Pod
   {{- end }}
 {{- end }}`,
 		},
+		{
+			name: "Block action opens and closes a scope",
+			yamlTpl: `{{- if .Outer }}
+{{- block "main" . }}
+{{- include "x" . }}
+{{- end }}
+{{- include "after" . }}
+{{- end }}`,
+			want: `{{- if .Outer }}
+  {{- block "main" . }}
+    {{- include "x" . }}
+  {{- end }}
+  {{- include "after" . }}
+{{- end }}`,
+		},
+		{
+			name: "Non-whitelisted helper functions are indented",
+			yamlTpl: `{{- if .X }}
+{{- printf "%s" .Y }}
+{{- tpl .Values.z . }}
+{{- quote .W }}
+{{- end }}`,
+			want: `{{- if .X }}
+  {{- printf "%s" .Y }}
+  {{- tpl .Values.z . }}
+  {{- quote .W }}
+{{- end }}`,
+		},
+		{
+			name: "Else inside if keeps parent level",
+			yamlTpl: `{{- if .X }}
+{{- include "a" . }}
+{{- else }}
+{{- include "b" . }}
+{{- end }}`,
+			want: `{{- if .X }}
+  {{- include "a" . }}
+{{- else }}
+  {{- include "b" . }}
+{{- end }}`,
+		},
+		{
+			name: "Stray else does not panic and clamps to zero",
+			yamlTpl: `{{ else }}
+kind: Pod`,
+			want: `{{ else }}
+kind: Pod`,
+		},
+		{
+			name: "Non-trimmed helper line is preserved by default",
+			yamlTpl: `{{- if .X }}
+    {{ include "a" . }}
+{{- end }}`,
+			// {{ include ... has no left-trim, so its 4-space indent is untouched.
+			want: `{{- if .X }}
+    {{ include "a" . }}
+{{- end }}`,
+		},
+		{
+			name:      "Non-trimmed helper line is rewritten and indented with --trim",
+			forceTrim: true,
+			yamlTpl: `{{- if .X }}
+    {{ include "a" . }}
+{{- end }}`,
+			want: `{{- if .X }}
+  {{- include "a" . }}
+{{- end }}`,
+		},
 	}
 
 	for _, tt := range tests {
-		got, err := FormatYamlTpl(tt.yamlTpl)
+		got, err := FormatYamlTpl(tt.yamlTpl, tt.forceTrim)
 		if err != nil {
 			t.Errorf("%s: unexpected error: %v", tt.name, err)
 			continue
