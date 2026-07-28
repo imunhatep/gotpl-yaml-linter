@@ -11,8 +11,8 @@ type LintCommand struct{}
 func (c LintCommand) Command() *cli.Command {
 	return &cli.Command{
 		Name:      "lint",
-		Usage:     "yaml gotpl linting",
-		UsageText: "Example: gotpl_linter -v 10 lint --path ./templates --filter *.yaml",
+		Usage:     "validate yaml gotpl formatting (no changes written)",
+		UsageText: "Example: gotpl-linter --vv 10 lint --path ./templates --filter '*.yaml'",
 		Flags: []cli.Flag{
 			&cli.PathFlag{
 				Name:        "path",
@@ -35,6 +35,13 @@ func (c LintCommand) Command() *cli.Command {
 				Required: false,
 				Value:    false,
 			},
+			&cli.BoolFlag{
+				Name:     "trim",
+				Aliases:  []string{"t"},
+				Usage:    "require non-{{- template openings to be {{- so they can be re-indented",
+				Required: false,
+				Value:    false,
+			},
 		},
 		Action: c.lintAction,
 	}
@@ -44,6 +51,7 @@ func (c LintCommand) lintAction(ctx *cli.Context) error {
 	path := ctx.Path("path")
 	filter := ctx.String("filter")
 	output := ctx.Bool("show")
+	forceTrim := ctx.Bool("trim")
 
-	return yamlTplLinting(path, filter, false, output)
+	return yamlTplLinting(path, filter, false, output, forceTrim)
 }
