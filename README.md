@@ -15,6 +15,16 @@ go install github.com/imunhatep/gotpl-yaml-linter/cmd/gotpl-linter@latest
 gotpl-linter --help
 ```
 
+### Container image
+
+Released images are published to GHCR for `linux/amd64` and `linux/arm64`. The
+working directory inside the image is `/work`, so mount the chart there:
+
+```bash
+podman run --rm -v "$PWD:/work:ro" \
+  ghcr.io/imunhatep/gotpl-yaml-linter:latest lint -p /work/templates
+```
+
 ## Usage
 
 The tool has two commands:
@@ -211,7 +221,9 @@ Output:
 ## Build from source
 
 ```bash
-make          # build binary into dist/
-make test     # gofmt check + go vet + golint + go test
-make xb       # cross-build for linux/darwin/windows
+make                  # build binary into dist/
+make test             # gofmt check + go vet + golint + go test
+make xb               # cross-build for linux/darwin/windows
+make image            # build a single-arch container image for the local host
+make image-multiarch  # build a linux/amd64 + linux/arm64 manifest
 ```

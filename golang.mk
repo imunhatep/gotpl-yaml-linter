@@ -80,6 +80,29 @@ clean:
 	rm dist/ -rvf
 	rm mocks/ -rvf
 
+IMAGE ?= ghcr.io/imunhatep/gotpl-yaml-linter
+PLATFORMS := linux/amd64,linux/arm64
+
+# Build a single-arch image for the local host.
+.PHONY: image
+image:
+	podman build \
+		--build-arg VERSION=$(BUILD_VERSION) \
+		--build-arg COMMIT=$(BUILD_HASH) \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		-f Containerfile \
+		-t $(IMAGE):$(BUILD_VERSION) .
+
+# Build a multi-arch manifest. Override IMAGE=registry/name to tag elsewhere, e.g.:
+#   make image-multiarch IMAGE=ghcr.io/someone/gotpl-yaml-linter
+.PHONY: image-multiarch
+image-multiarch:
+	podman build --platform $(PLATFORMS) --manifest $(IMAGE):$(BUILD_VERSION) \
+		--build-arg VERSION=$(BUILD_VERSION) \
+		--build-arg COMMIT=$(BUILD_HASH) \
+		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		-f Containerfile .
+
 .PHONY: docker-test
 docker-test:
 	$(DOCKER) build -t gotpl_linter:test -f build/test/Dockerfile .

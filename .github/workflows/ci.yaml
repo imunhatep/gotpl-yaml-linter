@@ -38,3 +38,26 @@ jobs:
       - name: Build Project
         run: |
           make
+
+  image:
+    name: CI Image
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Build only; publishing happens in the release workflow.
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Containerfile
+          push: false
+          build-args: |
+            VERSION=ci
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
