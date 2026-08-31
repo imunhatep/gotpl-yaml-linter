@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"github.com/imunhatep/gotpl-yaml-linter/internal"
-	command "github.com/imunhatep/gotpl-yaml-linter/internal/commands"
+	"github.com/imunhatep/gotpl-yaml-linter/internal/command"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v2"
 	"os"
