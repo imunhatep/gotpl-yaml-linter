@@ -17,7 +17,7 @@ WORKDIR /project/
 RUN mkdir -p ./bin \
     && env GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o ./bin/gotpl_linter_${TARGETOS}-${TARGETARCH} -ldflags "-s -w" ./cmd/gotpl-linter/main.go
 
-FROM hub.rms.evolutiongaming.com/hub/alpine:3.19
+FROM alpine:3.19
 
 RUN apk add --update bash ca-certificates curl
 
