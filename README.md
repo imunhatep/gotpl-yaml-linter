@@ -25,6 +25,18 @@ podman run --rm -v "$PWD:/work:ro" \
   ghcr.io/imunhatep/gotpl-yaml-linter:latest lint -p /work/templates
 ```
 
+The image is based on Alpine, so it has a shell and can be used as a CI job image.
+Override the entrypoint, for example in GitLab CI:
+
+```yaml
+gotpl:lint:
+  image:
+    name: ghcr.io/imunhatep/gotpl-yaml-linter:latest
+    entrypoint: [""]
+  script:
+    - gotpl-linter lint -p ./templates
+```
+
 ## Usage
 
 The tool has two commands:
